@@ -11,9 +11,9 @@ r = 3440 # radius of Earth in nautical miles
 nlon = 2**13
 nlat = 2**12
 
-predef_ids  = [       'Rat',    'APPLE',    'LAKIE',    'ERORE',      'KSCR' ]
-predef_lats = [  36.3894444,  40.556136,  40.829133,  40.954819,  35.7042745 ]
-predef_lons = [ -76.9113889, -74.062253, -73.976792, -73.899233, -79.5042976 ]
+predef_ids  = [      'NC18',       'Rat',    'APPLE',    'LAKIE',    'ERORE',      'KSCR' ]
+predef_lats = [  36.3894444,  36.3894444,  40.556136,  40.829133,  40.954819,  35.7042745 ]
+predef_lons = [ -76.9113889, -76.9113889, -74.062253, -73.976792, -73.899233, -79.5042976 ]
 
 verbose = False
 
@@ -137,6 +137,8 @@ if __name__ == '__main__':
                    'route': row[2] if row[2] else row[0]+'-'+row[1],
                    'durat': float(row[3]) }
         stops = flight['route'].split('-')
+        if( stops[0]  != row[0] ): stops = [row[0]] + stops
+        if( stops[-1] != row[1] ): stops += [row[1]]
         flight['legs'] = [[stops[n], stops[n+1]] for n in range(len(stops)-1)]
         log.append(flight)
         if verbose:
@@ -146,7 +148,7 @@ if __name__ == '__main__':
     
     print "Done building list of flights.  " + str(len(log)) + " total."
 
-    num_jobs = multiprocessing.cpu_count() - 1
+    num_jobs = multiprocessing.cpu_count() - 3
     bigmapq = multiprocessing.Queue()
     alllegsq = multiprocessing.Queue()
     

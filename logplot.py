@@ -4,11 +4,13 @@ from scipy.ndimage.filters import gaussian_filter
 import scipy.ndimage
 import matplotlib as mpl
 
-bigmap, lats, lons = pickle.load( open('log.p', 'rb') )
+bigmap, lats, lons, alllegs = pickle.load( open('log.p', 'rb') )
 lonv, latv = np.meshgrid(lons, lats, indexing='xy')
 
+print 'Done loading map data.'
+
 bigmap /= bigmap[np.nonzero(bigmap)].min()
-bigmap = np.sqrt(bigmap)
+bigmap = np.power(bigmap, .41)
 maxz = np.max(bigmap)
 
 
@@ -26,6 +28,20 @@ def blockshaped(arr, nrows, ncols):
     return (arr.reshape(h//nrows, nrows, -1, ncols)
                .swapaxes(1,2)
                .reshape(-1, nrows, ncols))
+
+def paramline(p1, p2, ps=100):
+    xs = np.linspace(p1[0], p2[0], ps)
+    ys = np.linspace(p1[1], p2[1], ps)
+    return (xs, ys)
+    
+def paramcurve(p1, p2, offsetpct, ps=50):
+    xs, ys = paramline(p1, p2, ps)
+    t = np.sin(np.linspace(0, np.pi, ps))
+    d = np.linalg.norm(np.array(p1)-np.array(p2))
+    offset = 0.01 * offsetpct * d
+    xo = np.array(offset * (p2[1]-p1[1])/d)
+    yo = np.array(offset * (p2[0]-p1[0])/d)
+    return (xs + xo*t, ys + yo*t)
 
 lonn = 16
 latn = 8
@@ -62,7 +78,7 @@ for i in range(bmgridtf.size):
     gridbits.append(gridbit)
 
 submaps = []
-border = 0.3
+border = 0.2
 
 for b in gridbits:
     lonmin, lonmax, latmin, latmax = (np.inf, -np.inf, np.inf, -np.inf)
@@ -91,23 +107,28 @@ for b in gridbits:
              }
     submaps.append(submap)
 
+print 'Done generating submap data.'
+
 from matplotlib import cm
 
-cmap_resolution = 40
-cmap = cm.get_cmap("jet", cmap_resolution) #generate a jet map with 10 values 
+cmap_resolution = 50
+cmap = cm.get_cmap('jet', cmap_resolution) #generate a jet map with 10 values 
 cmap_vals = cmap(np.arange(cmap_resolution)) #extract those values as an array 
-cmap_vals[0][3] = 0 #change the first value 
-cmap_vals[1][3] = .1 
-cmap_vals[2][3] = .5 
-cmap_vals[3][3] = .9 
-newcmap = mpl.colors.LinearSegmentedColormap.from_list("newcmap", cmap_vals)
+cmap_vals[0][3] = 0.0 #change the first value 
+fade_size = 15
+for i in range(1, fade_size+1):
+    cmap_vals[i][3] = ((i-1.0)/fade_size)**1.5
+
+newcmap = mpl.colors.LinearSegmentedColormap.from_list('newcmap', cmap_vals)
 
 import scipy.ndimage
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 
-zoom = 2.5
-blur = 8
+figsize = (15,15)
+zoom = 20
+blur = 30
+quick = False
 
 for i, submap in enumerate(submaps):
 
@@ -116,14 +137,30 @@ for i, submap in enumerate(submaps):
     width  = r * (submap['lonmax']-submap['lonmin']) * np.pi / 180 * np.cos( latmid * np.pi / 180 )
     height = r * (submap['latmax']-submap['latmin']) * np.pi / 180
     
-    lons = scipy.ndimage.zoom(lonv[(submap['latis'][0]):(submap['latis'][1]),
-                                   (submap['lonis'][0]):(submap['lonis'][1])], zoom)
-    lats = scipy.ndimage.zoom(latv[(submap['latis'][0]):(submap['latis'][1]),
-                                   (submap['lonis'][0]):(submap['lonis'][1])], zoom)
-    zs   = scipy.ndimage.zoom(bigmap[(submap['latis'][0]):(submap['latis'][1]),
-                                     (submap['lonis'][0]):(submap['lonis'][1])], zoom)
-    zs = gaussian_filter(zs, sigma=blur)
+    if quick:
+        lons = lonv[(submap['latis'][0]):(submap['latis'][1]),
+                    (submap['lonis'][0]):(submap['lonis'][1])]
+        lats = latv[(submap['latis'][0]):(submap['latis'][1]),
+                    (submap['lonis'][0]):(submap['lonis'][1])]
+        zs   = bigmap[(submap['latis'][0]):(submap['latis'][1]),
+                      (submap['lonis'][0]):(submap['lonis'][1])]
+    
+    else:
+        lons = scipy.ndimage.interpolation.zoom(
+                                  lonv[(submap['latis'][0]):(submap['latis'][1]),
+                                       (submap['lonis'][0]):(submap['lonis'][1])],
+                                  zoom, order=1)
+        lats = scipy.ndimage.interpolation.zoom(
+                                  latv[(submap['latis'][0]):(submap['latis'][1]),
+                                       (submap['lonis'][0]):(submap['lonis'][1])],
+                                  zoom, order=1)
+        zs   = scipy.ndimage.interpolation.zoom(
+                                  bigmap[(submap['latis'][0]):(submap['latis'][1]),
+                                         (submap['lonis'][0]):(submap['lonis'][1])],
+                                  zoom, order=3)
+        zs = gaussian_filter(zs, sigma=blur)
 
+    plt.figure(figsize=figsize)
     map = Basemap(width=width, height=height,lon_0=lonmid,lat_0=latmid,
                 resolution='i',projection='cass')
 
@@ -135,6 +172,15 @@ for i, submap in enumerate(submaps):
     #map.drawmeridians(np.arange(0,360,30))
     #map.drawparallels(np.arange(-90,90,30))
     pc = map.pcolormesh(lons,lats,zs,latlon=True,vmax=maxz,cmap=newcmap)
+    
+    for leg in alllegs:
+        if len(leg) <= 1:
+            continue
+        offset = np.random.uniform(-5,5)
+        p1 = map(leg[0][1], leg[0][0])
+        p2 = map(leg[1][1], leg[1][0])
+        xs, ys = paramcurve(p1, p2, offset)
+        map.plot(xs, ys, linewidth=1.8, color=(1,1,1,0.2))
 
     plt.savefig(str(i+1)+'.png')
     plt.close()

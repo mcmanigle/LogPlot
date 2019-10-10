@@ -4,6 +4,7 @@ from scipy.ndimage.filters import gaussian_filter
 import scipy.ndimage
 import scipy.misc
 import matplotlib as mpl
+from PIL import Image
 mpl.use('agg')
 
 bigmap, lats, lons, alllegs = pickle.load( open('log.p', 'rb') )
@@ -26,6 +27,7 @@ def blockshaped(arr, nrows, ncols):
     If arr is a 2D array, the returned array should look like n subblocks with
     each subblock preserving the "physical" layout of arr.
     """
+    arr = np.array(arr)
     h, w = arr.shape
     return (arr.reshape(h//nrows, nrows, -1, ncols)
                .swapaxes(1,2)
@@ -221,18 +223,18 @@ for i, submap in enumerate(submaps):
     f.canvas.draw()
     colors = np.fromstring(f.canvas.tostring_rgb(), dtype=np.uint8, sep=''
                           ).reshape(f.canvas.get_width_height()[::-1] + (3,))
-    if output_intermediates: scipy.misc.toimage(colors, cmin=0, cmax=255).save(str(i+1)+'a.png')
+    if output_intermediates: Image.fromarray(colors.astype('uint8')).save(str(i+1)+'a.png')
     plt.clf()
     
     f = plt.figure(figsize=figsize(width, height), facecolor='black')
     map = Basemap(width=width, height=height,lon_0=lonmid,lat_0=latmid,
                 resolution='i',projection='cass')
-    plt.gca().set_axis_bgcolor('black')
+    plt.gca().set_facecolor('black')
     map.pcolormesh(lons,lats,zs,latlon=True,cmap=opcmap,vmax=maxz)
     f.canvas.draw()
     opmap = np.fromstring(f.canvas.tostring_rgb(), dtype=np.uint8, sep=''
                          ).reshape(f.canvas.get_width_height()[::-1] + (3,))
-    if output_intermediates: scipy.misc.toimage(opmap, cmin=0, cmax=255).save(str(i+1)+'b.png')
+    if output_intermediates: Image.fromarray(opmap.astype('uint8')).save(str(i+1)+'b.png')
     plt.clf()
     
     print 'Done plotting color map for submap ' + str(i+1) + '.'
@@ -266,11 +268,11 @@ for i, submap in enumerate(submaps):
     f.canvas.draw()
     bgmap = np.fromstring(f.canvas.tostring_rgb(), dtype=np.uint8, sep=''
                          ).reshape(f.canvas.get_width_height()[::-1] + (3,))
-    if output_intermediates: scipy.misc.toimage(bgmap, cmin=0, cmax=255).save(str(i+1)+'c.png')
+    if output_intermediates: Image.fromarray(bgmap.astype('uint8')).save(str(i+1)+'c.png')
     
     plt.clf()
     
     img = colors * (opmap/255.) + bgmap * (1 - opmap/255.)
-    scipy.misc.toimage(img, cmin=0, cmax=255).save(str(i+1)+'.png')
+    Image.fromarray(img.astype('uint8')).save(str(i+1)+'.png')
     
     print 'Saved submap ' + str(i+1) + '.'
