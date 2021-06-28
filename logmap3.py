@@ -5,7 +5,7 @@ from scipy import sparse
 import pickle
 import sqlite3
 import multiprocessing
-from Queue import Empty
+from queue import Empty
 from functools import partial
 
 verbose = False
@@ -39,9 +39,9 @@ def calculate_map_coordinates():
 def build_airport_db():
     airports = {}
 
-    predef_ids  = [      'NC18',       'Rat',    'APPLE',    'LAKIE',    'ERORE',      'KSCR' ]
-    predef_lats = [  36.3894444,  36.3894444,  40.556136,  40.829133,  40.954819,  35.7042745 ]
-    predef_lons = [ -76.9113889, -76.9113889, -74.062253, -73.976792, -73.899233, -79.5042976 ]
+    predef_ids  = [      'NC18',       'Rat',    'APPLE',    'LAKIE',    'ERORE',      'KSCR',    'SAJUL',    'TOMDY',  ]
+    predef_lats = [  36.3894444,  36.3894444,  40.556136,  40.829133,  40.954819,  35.7042745,  40.327489,  30.935178,  ]
+    predef_lons = [ -76.9113889, -76.9113889, -74.062253, -73.976792, -73.899233, -79.5042976, -73.550033, -81.423592,  ]
 
     for id, lat, lon in zip(predef_ids, predef_lats, predef_lons):
         ap = { 'lat': lat, 'lon': lon }
@@ -49,7 +49,7 @@ def build_airport_db():
 
     with open('airports.csv') as airportdb:
         apreader = csv.reader(airportdb)
-        header = apreader.next()
+        header = next(apreader)
         idnt_i = header.index('ident')
         iata_i = header.index('iata_code')
         locl_i = header.index('local_code')

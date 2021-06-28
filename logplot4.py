@@ -10,7 +10,7 @@ mpl.use('agg')
 bigmap, lats, lons, alllegs = pickle.load( open('log.p', 'rb') )
 lonv, latv = np.meshgrid(lons, lats, indexing='xy')
 
-print 'Done loading map data.'
+print('Done loading map data.')
 
 bigmap = bigmap.toarray()
 bigmap /= bigmap[np.nonzero(bigmap)].min()
@@ -38,7 +38,7 @@ def paramline(p1, p2, ps=25):
     ys = np.linspace(p1[1], p2[1], ps)
     return (xs, ys)
     
-def paramcurve(p1, p2, offsetlim, ps=25):
+def paramcurve(p1, p2, offsetlim=0.2, ps=25):
     xs, ys = paramline(p1, p2, ps)
     t = np.sin(np.linspace(0, np.pi, ps))
     d = np.linalg.norm(np.array(p1)-np.array(p2))
@@ -64,7 +64,7 @@ def localpath_old(p, r, theta=0, ps=25):
             xs * np.sin(theta) + ys * np.cos(theta) + p[1] )
 
 def localpath(p, ps=25):
-    radius = np.random.uniform(14000, 18000)
+    radius = np.random.uniform(0.1, 0.2)
     th_0 = np.random.uniform(0, 2.*np.pi)
     th_d = np.random.uniform(np.pi, 7.*np.pi/4.)
     r_sin_deltpct = np.random.uniform(5., 10.)
@@ -81,9 +81,9 @@ def localpath(p, ps=25):
 
 lonn = 16
 latn = 8
-bmgrid = blockshaped(bigmap, bigmap.shape[0]/latn, bigmap.shape[1]/lonn)
-lonvgr = blockshaped(lonv,   bigmap.shape[0]/latn, bigmap.shape[1]/lonn)
-latvgr = blockshaped(latv,   bigmap.shape[0]/latn, bigmap.shape[1]/lonn)
+bmgrid = blockshaped(bigmap, bigmap.shape[0]//latn, bigmap.shape[1]//lonn)
+lonvgr = blockshaped(lonv,   bigmap.shape[0]//latn, bigmap.shape[1]//lonn)
+latvgr = blockshaped(latv,   bigmap.shape[0]//latn, bigmap.shape[1]//lonn)
 
 bmgridtf = np.array([x.sum()>0 for x in bmgrid])
 
@@ -143,35 +143,37 @@ for b in gridbits:
              }
     submaps.append(submap)
 
-print 'Done generating submap data.'
+print('Done generating submap data.')
 
 from matplotlib import cm
 
 cmap_resolution = 100
 cmap = cm.get_cmap('jet', cmap_resolution)
 cmap_vals = cmap(np.arange(cmap_resolution)) #extract those values as an array 
-fade_size = 6
-first_stage_v = 0.75
-first_stage_z = 3*cmap_resolution/10
+fade_size = 12
+first_stage_v = 0.6
+first_stage_z = 3*cmap_resolution//10
 second_stage_v = 0.9
-second_stage_z = 6*cmap_resolution/10
+second_stage_z = 6*cmap_resolution//10
 
-for j in range(0,3):
-    cmap_vals[0][j] = 0.0 #change the first value 
-    for i in range(1, fade_size):
-        cmap_vals[i][j] = first_stage_v * ((i-1.0)/fade_size)**1.5
-    for i in range(fade_size, first_stage_z):
-        cmap_vals[i][j] = first_stage_v
-    for i in range(first_stage_z, second_stage_z):
-        cmap_vals[i][j] = first_stage_v + (second_stage_v - first_stage_v) * (i-first_stage_z)/(second_stage_z - first_stage_z)
-    for i in range(second_stage_z, cmap_resolution):
-        cmap_vals[i][j] = second_stage_v
+cmap_vals[0][3] = 0.0 #change the first value 
+for i in range(1, fade_size):
+    cmap_vals[i][3] = first_stage_v * ((i-1.0)/fade_size)**1.5
+for i in range(fade_size, first_stage_z):
+    cmap_vals[i][3] = first_stage_v
+for i in range(first_stage_z, second_stage_z):
+    cmap_vals[i][3] = first_stage_v + (second_stage_v - first_stage_v) * (i-first_stage_z)/(second_stage_z - first_stage_z)
+for i in range(second_stage_z, cmap_resolution):
+    cmap_vals[i][3] = second_stage_v
 
 opcmap = mpl.colors.LinearSegmentedColormap.from_list('opcmap', cmap_vals)
 
+
 import scipy.ndimage
-from mpl_toolkits.basemap import Basemap
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
+from cartopy.io.img_tiles import Stamen
 
 def figsize(w, h, figscale = 25):
     if w > h:
@@ -179,11 +181,11 @@ def figsize(w, h, figscale = 25):
     else:
         return (w*figscale/h, figscale)
 
+projection = ccrs.PlateCarree()
 dpi = 300
 zoom = 5
-blur = 8
+blur = 24
 quick = False
-output_intermediates = False
 
 for i, submap in enumerate(submaps):
     
@@ -215,65 +217,40 @@ for i, submap in enumerate(submaps):
                                   zoom, order=3)
         zs = gaussian_filter(zs, sigma=blur)
     
-    print 'Done zooming and blurring map data for submap ' + str(i+1) + '.'
+    print('Done zooming and blurring map data for submap ' + str(i+1) + '.')
     
-    f = plt.figure(figsize=figsize(width, height), dpi=dpi)
-    map = Basemap(width=width, height=height,lon_0=lonmid,lat_0=latmid,
-                resolution='i',projection='cass')
-    map.pcolormesh(lons,lats,zs,latlon=True,cmap=cmap,vmax=maxz,zorder=100)
-    f.canvas.draw()
-    colors = np.fromstring(f.canvas.tostring_rgb(), dtype=np.uint8, sep=''
-                          ).reshape(f.canvas.get_width_height()[::-1] + (3,))
-    if output_intermediates: Image.fromarray(colors.astype('uint8')).save(str(i+1)+'a.png')
-    plt.clf()
-    
-    f = plt.figure(figsize=figsize(width, height), dpi=dpi, facecolor='black')
-    map = Basemap(width=width, height=height,lon_0=lonmid,lat_0=latmid,
-                resolution='i',projection='cass')
-    plt.gca().set_facecolor('black')
-    map.pcolormesh(lons,lats,zs,latlon=True,cmap=opcmap,vmax=maxz)
-    f.canvas.draw()
-    opmap = np.fromstring(f.canvas.tostring_rgb(), dtype=np.uint8, sep=''
-                         ).reshape(f.canvas.get_width_height()[::-1] + (3,))
-    if output_intermediates: Image.fromarray(opmap.astype('uint8')).save(str(i+1)+'b.png')
-    plt.clf()
-    
-    print 'Done plotting color map for submap ' + str(i+1) + '.'
 
-    f = plt.figure(figsize=figsize(width, height), dpi=dpi)
-    map = Basemap(width=width, height=height,lon_0=lonmid,lat_0=latmid,
-                resolution='i',projection='cass')
+    f = plt.figure(figsize=figsize(width, height), dpi=dpi, tight_layout=True)
+    logmap = plt.axes(projection=projection)
+
+    tiler = Stamen('terrain-background')
+    logmap.add_image(tiler, 10, interpolation='spline36')
     
-    map.drawcoastlines(linewidth=0.75, color=(0.9,0.9,0.9))
-    map.drawcountries(linewidth=0.5, color=(0.9,0.9,0.9))
-    map.drawstates(linewidth=0.25, color=(0.9,0.9,0.9))
-    map.fillcontinents(color='black',lake_color='black')
-    map.drawmapboundary(fill_color='black')
-    
-    print 'Done plotting base map for submap ' + str(i+1) + '.'
+    state_boundaries = cfeature.NaturalEarthFeature('cultural', 'admin_1_states_provinces', '10m')
+    logmap.add_feature(state_boundaries, facecolor=(0,0,0,0), edgecolor=(0.2,0.2,0.2,0.5))
+
+    print('Done plotting base map for submap ' + str(i+1) + '.')
 
     for leg in alllegs:
         if len(leg) == 1:
-            p = map(leg[0][1], leg[0][0])
+            p = (leg[0][1], leg[0][0])
             xs, ys = localpath(p)
         elif len(leg) == 2:
-            p1 = map(leg[0][1], leg[0][0])
-            p2 = map(leg[1][1], leg[1][0])
-            xs, ys = paramcurve(p1, p2, 12500)
+            p1 = (leg[0][1], leg[0][0])
+            p2 = (leg[1][1], leg[1][0])
+            xs, ys = paramcurve(p1, p2)
         else:
             continue
-        map.plot(xs, ys, linewidth=1., color='white')
+        logmap.plot(xs, ys, linewidth=1., color='white')
     
-    print 'Done plotting paths for submap ' + str(i+1) + '.'
+    print('Done plotting paths for submap ' + str(i+1) + '.')
 
-    f.canvas.draw()
-    bgmap = np.fromstring(f.canvas.tostring_rgb(), dtype=np.uint8, sep=''
-                         ).reshape(f.canvas.get_width_height()[::-1] + (3,))
-    if output_intermediates: Image.fromarray(bgmap.astype('uint8')).save(str(i+1)+'c.png')
+    logmap.pcolormesh(lons,lats,zs,cmap=opcmap,vmax=maxz, zorder=100)
+
+    print('Done plotting color on submap ' + str(i+1) + '.')
+
+    logmap.set_extent([submap['lonmin'], submap['lonmax'],
+                       submap['latmin'], submap['latmax']], crs=projection)
+    plt.savefig(str(i+1)+'.png', dpi='figure')
     
-    plt.clf()
-    
-    img = colors * (opmap/255.) + bgmap * (1 - opmap/255.)
-    Image.fromarray(img.astype('uint8')).save(str(i+1)+'.png')
-    
-    print 'Saved submap ' + str(i+1) + '.'
+    print('Saved submap ' + str(i+1) + '.')
